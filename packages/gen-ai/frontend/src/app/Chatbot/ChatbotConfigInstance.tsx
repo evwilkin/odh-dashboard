@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { MessageBox, ChatbotWelcomePrompt } from '@patternfly/chatbot';
-import { GuardrailModelConfig, MCPServerFromAPI, TokenInfo } from '~/app/types';
+import { MCPServerFromAPI, TokenInfo } from '~/app/types';
 import { ServerStatusInfo } from '~/app/hooks/useMCPServerStatuses';
 import useChatbotMessages, { UseChatbotMessagesReturn } from './hooks/useChatbotMessages';
 import {
@@ -14,12 +14,14 @@ import {
   selectGuardrail,
   selectGuardrailUserInputEnabled,
   selectGuardrailModelOutputEnabled,
+  selectGuardrailSubscription,
   selectRagEnabled,
   selectKnowledgeMode,
   selectSelectedVectorStoreId,
+  selectActivePrompt,
 } from './store';
 import { ChatbotMessages } from './ChatbotMessagesList';
-import { sampleWelcomePrompts } from './const';
+import { sampleWelcomePrompts, PLACEHOLDER_BOT_CONTENT } from './const';
 
 interface ChatbotConfigInstanceProps {
   configId: string;
@@ -32,7 +34,8 @@ interface ChatbotConfigInstanceProps {
   showWelcomePrompt?: boolean;
   welcomeDescription?: string;
   onMessagesHookReady?: (hook: UseChatbotMessagesReturn) => void;
-  guardrailModelConfigs?: GuardrailModelConfig[];
+  configIndex?: number;
+  isCompareMode?: boolean;
 }
 
 export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
@@ -46,7 +49,8 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
   showWelcomePrompt = false,
   welcomeDescription = 'Welcome to the playground',
   onMessagesHookReady,
-  guardrailModelConfigs = [],
+  configIndex,
+  isCompareMode,
 }) => {
   const systemInstruction = useChatbotConfigStore(selectSystemInstruction(configId));
   const temperature = useChatbotConfigStore(selectTemperature(configId));
@@ -63,10 +67,21 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
 
   // Keep selectedVectorStoreId in sync with the active knowledge mode:
   // - inline: always the auto-provisioned store ID
-  // - external: cleared to null so the user must pick via the selector
+  // - external: cleared to null only when transitioning FROM inline, not on remount
+  //   (remount occurs when entering compare mode; we must not clobber the user's existing selection)
+  const prevKnowledgeModeRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    updateSelectedVectorStoreId(configId, knowledgeMode === 'inline' ? currentVectorStoreId : null);
+    if (knowledgeMode === 'inline') {
+      updateSelectedVectorStoreId(configId, currentVectorStoreId);
+    } else if (prevKnowledgeModeRef.current === 'inline') {
+      // Only clear when the user explicitly switches from inline → external
+      updateSelectedVectorStoreId(configId, null);
+    }
+    prevKnowledgeModeRef.current = knowledgeMode;
   }, [knowledgeMode, currentVectorStoreId, configId, updateSelectedVectorStoreId]);
+
+  // Prompt state from store (for analytics)
+  const activePrompt = useChatbotConfigStore(selectActivePrompt(configId));
 
   // Guardrails configuration from store
   const guardrail = useChatbotConfigStore(selectGuardrail(configId));
@@ -76,6 +91,7 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
   const guardrailModelOutputEnabled = useChatbotConfigStore(
     selectGuardrailModelOutputEnabled(configId),
   );
+  const guardrailSubscription = useChatbotConfigStore(selectGuardrailSubscription(configId));
 
   // Build guardrails config for the messages hook
   const guardrailsConfig = React.useMemo(
@@ -84,8 +100,9 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
       guardrail,
       userInputEnabled: guardrailUserInputEnabled,
       modelOutputEnabled: guardrailModelOutputEnabled,
+      guardrailSubscription,
     }),
-    [guardrail, guardrailUserInputEnabled, guardrailModelOutputEnabled],
+    [guardrail, guardrailUserInputEnabled, guardrailModelOutputEnabled, guardrailSubscription],
   );
 
   const getToolSelections = React.useCallback(
@@ -95,6 +112,7 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
   );
 
   const messagesHook = useChatbotMessages({
+    configId,
     modelId: selectedModel,
     systemInstruction,
     isRawUploaded: isRagEnabled,
@@ -109,8 +127,12 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
     toolSelections: getToolSelections,
     namespace,
     guardrailsConfig,
-    guardrailModelConfigs,
     subscription: selectedSubscription,
+    configIndex,
+    isCompareMode,
+    isGuardrailEnabled: Boolean(guardrail),
+    promptVersion: activePrompt?.version ?? 0,
+    promptName: activePrompt?.name ?? '',
   });
 
   // Expose the messages hook to parent and update when it changes
@@ -122,7 +144,7 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
 
   return (
     <MessageBox position="top">
-      {showWelcomePrompt && (
+      {showWelcomePrompt && messagesHook.messages.length === 0 && (
         <ChatbotWelcomePrompt
           title={username ? `Hello, ${username}` : 'Hello'}
           description={welcomeDescription}
@@ -140,6 +162,7 @@ export const ChatbotConfigInstance: React.FC<ChatbotConfigInstanceProps> = ({
         isLoading={messagesHook.isLoading}
         isStreamingWithoutContent={messagesHook.isStreamingWithoutContent}
         modelDisplayName={messagesHook.modelDisplayName}
+        placeholderContent={PLACEHOLDER_BOT_CONTENT}
       />
     </MessageBox>
   );

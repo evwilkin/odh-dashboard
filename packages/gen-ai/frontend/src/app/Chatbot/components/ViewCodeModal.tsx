@@ -12,6 +12,7 @@ import {
 } from '@patternfly/react-core';
 import { CodeEditor, Language } from '@patternfly/react-code-editor';
 import { CodeExportRequest, FileModel, MCPServerFromAPI, TokenInfo } from '~/app/types';
+import { GUARDRAIL_INPUT_PROMPT, GUARDRAIL_OUTPUT_PROMPT } from '~/app/Chatbot/const';
 import { generateMCPServerConfig, getLlamaModelDisplayName } from '~/app/utilities';
 import useFetchVectorStores from '~/app/hooks/useFetchVectorStores';
 import { useGenAiAPI } from '~/app/hooks/useGenAiAPI';
@@ -22,7 +23,6 @@ import {
   selectConfigIds,
   getConfigDisplayLabel,
 } from '~/app/Chatbot/store';
-import { usePlaygroundStore } from '~/app/Chatbot/store/usePlaygroundStore';
 
 interface ViewCodeModalProps {
   isOpen: boolean;
@@ -123,7 +123,6 @@ const ViewCodeModal: React.FunctionComponent<ViewCodeModalProps> = ({
   // Get all config IDs from store
   const configIds = useChatbotConfigStore(selectConfigIds);
   const isCompareMode = configIds.length > 1;
-  const activePrompt = usePlaygroundStore((state) => state.activePrompt);
 
   // Dynamic state for each config's code export
   const [codeStates, setCodeStates] = React.useState<Record<string, ConfigCodeState | undefined>>(
@@ -156,6 +155,10 @@ const ViewCodeModal: React.FunctionComponent<ViewCodeModalProps> = ({
         isRagEnabled,
         knowledgeMode,
         selectedVectorStoreId,
+        activePrompt,
+        guardrail,
+        guardrailUserInputEnabled,
+        guardrailModelOutputEnabled,
       } = config;
       const mcpServersToUse = mcpServers.filter((server) =>
         selectedMcpServerIds.includes(server.url),
@@ -246,6 +249,14 @@ const ViewCodeModal: React.FunctionComponent<ViewCodeModalProps> = ({
           ...(activePrompt && {
             prompt: { name: activePrompt.name, version: activePrompt.version },
           }),
+          ...(guardrail &&
+            (guardrailUserInputEnabled || guardrailModelOutputEnabled) && {
+              guardrail_config: {
+                guardrail_model: guardrail,
+                ...(guardrailUserInputEnabled && { input_prompt: GUARDRAIL_INPUT_PROMPT }),
+                ...(guardrailModelOutputEnabled && { output_prompt: GUARDRAIL_OUTPUT_PROMPT }),
+              },
+            }),
         };
         /* eslint-enable camelcase */
 
@@ -276,7 +287,6 @@ const ViewCodeModal: React.FunctionComponent<ViewCodeModalProps> = ({
       mcpServerTokens,
       namespace,
       toolSelections,
-      activePrompt,
     ],
   );
 

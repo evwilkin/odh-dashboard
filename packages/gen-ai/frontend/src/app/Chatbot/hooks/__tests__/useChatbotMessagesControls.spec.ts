@@ -77,6 +77,7 @@ const setupMocks = (): void => {
 
 // Helper to create default hook props
 const createDefaultHookProps = (overrides?: {
+  configId?: string;
   modelId?: string;
   systemInstruction?: string;
   isRawUploaded?: boolean;
@@ -86,6 +87,7 @@ const createDefaultHookProps = (overrides?: {
   selectedServerIds?: string[];
 }) => ({
   ...defaultMcpProps,
+  configId: 'default',
   modelId: mockModelId,
   systemInstruction: '',
   isRawUploaded: true,
@@ -441,14 +443,7 @@ describe('useChatbotMessages - controls', () => {
         result.current.clearConversation();
       });
 
-      // Should have only the initial bot message
-      expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0]).toMatchObject({
-        role: 'bot',
-        content:
-          'Before you begin chatting, you can change the model, edit the system prompt, adjust model parameters to fit your specific use case.',
-        name: mockModelId,
-      });
+      expect(result.current.messages).toHaveLength(0);
     });
 
     it('should reset all state variables', () => {
@@ -501,10 +496,7 @@ describe('useChatbotMessages - controls', () => {
       expect(capturedAbortSignal?.aborted).toBe(true);
 
       // Messages should be reset
-      expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0].content).toBe(
-        'Before you begin chatting, you can change the model, edit the system prompt, adjust model parameters to fit your specific use case.',
-      );
+      expect(result.current.messages).toHaveLength(0);
     });
 
     it('should preserve model and configuration settings', async () => {
@@ -556,10 +548,7 @@ describe('useChatbotMessages - controls', () => {
         });
       }).not.toThrow();
 
-      expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0].content).toBe(
-        'Before you begin chatting, you can change the model, edit the system prompt, adjust model parameters to fit your specific use case.',
-      );
+      expect(result.current.messages).toHaveLength(0);
     });
 
     it('should clear conversation history but retain RAG configuration', async () => {
@@ -624,10 +613,7 @@ describe('useChatbotMessages - controls', () => {
       });
 
       // Should only have the initial message - abort error was silently ignored
-      expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0].content).toBe(
-        'Before you begin chatting, you can change the model, edit the system prompt, adjust model parameters to fit your specific use case.',
-      );
+      expect(result.current.messages).toHaveLength(0);
     });
 
     it('should silently handle abort when clearing during streaming', async () => {
@@ -673,10 +659,7 @@ describe('useChatbotMessages - controls', () => {
       });
 
       // Should only have the initial message - abort was silently handled
-      expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0].content).toBe(
-        'Before you begin chatting, you can change the model, edit the system prompt, adjust model parameters to fit your specific use case.',
-      );
+      expect(result.current.messages).toHaveLength(0);
     });
   });
 });

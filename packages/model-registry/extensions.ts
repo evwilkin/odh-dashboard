@@ -2,9 +2,10 @@ import type { Extension, CodeRef } from '@openshift/dynamic-plugin-sdk';
 import type {
   AutofillConnectionButtonExtension,
   NamespaceSelectorExtension,
+  ProjectsBridgeProviderExtension,
 } from '@mf/modelRegistry/extension-points';
 
-const CATALOG_SETTINGS_PAGE_TITLE = 'AI catalog settings';
+const CATALOG_SETTINGS_PAGE_TITLE = 'Model catalog settings';
 const CATALOG_SETTINGS_URL = '/settings/model-resources-operations/model-catalog';
 
 type ModelCatalogBannerExtension = Extension<
@@ -26,6 +27,7 @@ type CatalogSettingsUrlExtension = Extension<
 const extensions: (
   | AutofillConnectionButtonExtension
   | NamespaceSelectorExtension
+  | ProjectsBridgeProviderExtension
   | ModelCatalogBannerExtension
   | CatalogSettingsUrlExtension
   | Extension
@@ -60,6 +62,12 @@ const extensions: (
     type: 'model-registry.namespace/selector',
     properties: {
       component: () => import('./src/projectSelector/ProjectSelectorField'),
+    },
+  },
+  {
+    type: 'model-registry.projects/bridge-provider',
+    properties: {
+      component: () => import('./src/projectSelector/ProjectsBridgeProvider'),
     },
   },
 ];

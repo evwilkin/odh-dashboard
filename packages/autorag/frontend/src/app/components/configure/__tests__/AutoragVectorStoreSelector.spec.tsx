@@ -21,12 +21,13 @@ jest.mock('~/app/hooks/queries', () => ({
 }));
 
 const mockNotificationError = jest.fn();
+const mockNotificationWarning = jest.fn();
 jest.mock('~/app/hooks/useNotification', () => ({
   useNotification: jest.fn(() => ({
     success: jest.fn(),
     error: mockNotificationError,
     info: jest.fn(),
-    warning: jest.fn(),
+    warning: mockNotificationWarning,
     remove: jest.fn(),
   })),
 }));
@@ -134,7 +135,7 @@ describe('AutoragVectorStoreSelector', () => {
 
   it('should disable the toggle when no providers are available', () => {
     mockUseLlamaStackVectorStoreProvidersQuery.mockReturnValue({
-      data: { vector_store_providers: [] }, // eslint-disable-line camelcase
+      data: { vector_store_providers: [], totalProviderCount: 0 }, // eslint-disable-line camelcase
       isLoading: false,
     } as unknown as ReturnType<typeof useLlamaStackVectorStoreProvidersQuery>);
 
@@ -156,7 +157,35 @@ describe('AutoragVectorStoreSelector', () => {
 
     const toggle = screen.getByTestId('vector-store-select-toggle');
     expect(toggle).toBeDisabled();
-    expect(mockNotificationError).toHaveBeenCalledWith('Failed to load vector I/O providers');
+    expect(mockNotificationError).toHaveBeenCalledWith(
+      'Failed to load vector I/O providers.',
+      expect.anything(), // Error message may include details from lls BFF in the future.
+    );
+  });
+
+  it('should show warning notification when providers exist but none are supported', () => {
+    mockUseLlamaStackVectorStoreProvidersQuery.mockReturnValue({
+      data: { vector_store_providers: [], totalProviderCount: 2 }, // eslint-disable-line camelcase
+      isLoading: false,
+    } as unknown as ReturnType<typeof useLlamaStackVectorStoreProvidersQuery>);
+
+    renderWithProviders(<AutoragVectorStoreSelector />);
+
+    expect(mockNotificationWarning).toHaveBeenCalledWith(
+      'No compatible vector I/O providers found.',
+      expect.anything(),
+    );
+  });
+
+  it('should not show warning notification when no providers exist at all', () => {
+    mockUseLlamaStackVectorStoreProvidersQuery.mockReturnValue({
+      data: { vector_store_providers: [], totalProviderCount: 0 }, // eslint-disable-line camelcase
+      isLoading: false,
+    } as unknown as ReturnType<typeof useLlamaStackVectorStoreProvidersQuery>);
+
+    renderWithProviders(<AutoragVectorStoreSelector />);
+
+    expect(mockNotificationWarning).not.toHaveBeenCalled();
   });
 
   it('should show a loading skeleton when providers are loading', () => {
@@ -191,7 +220,7 @@ describe('AutoragVectorStoreSelector', () => {
       });
     });
 
-    it('should update field value to ls_{provider_id} when selecting a provider', async () => {
+    it('should update field value to provider_id when selecting a provider', async () => {
       let formValues: unknown;
       const onFormChange = (values: unknown) => {
         formValues = values;
@@ -206,7 +235,7 @@ describe('AutoragVectorStoreSelector', () => {
       // Wait for field value to update
       await waitFor(() => {
         expect(formValues).toMatchObject({
-          llama_stack_vector_io_provider_id: 'ls_milvus', // eslint-disable-line camelcase
+          llama_stack_vector_io_provider_id: 'milvus', // eslint-disable-line camelcase
         });
       });
 
@@ -216,7 +245,7 @@ describe('AutoragVectorStoreSelector', () => {
       );
     });
 
-    it('should display provider with new ls_{provider_id} format', () => {
+    it('should display provider with provider_id format', () => {
       renderWithProviders(<AutoragVectorStoreSelector />);
 
       fireEvent.click(screen.getByTestId('vector-store-select-toggle'));

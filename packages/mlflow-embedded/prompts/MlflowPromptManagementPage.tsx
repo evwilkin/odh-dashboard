@@ -43,7 +43,7 @@ const MlflowPromptManagementPage: React.FC = () => {
       title={
         isTopLevel ? (
           <Flex alignItems={{ default: 'alignItemsCenter' }} gap={{ default: 'gapLg' }}>
-            <FlexItem>
+            <FlexItem data-testid="prompt-management-page-title">
               <TitleWithIcon
                 title={PROMPT_MANAGEMENT_PAGE_TITLE}
                 objectType={ProjectObjectType.promptManagement}
@@ -77,7 +77,11 @@ const MlflowPromptManagementPage: React.FC = () => {
       }
       headerAction={
         isTopLevel ? (
-          <LaunchMlflowButton testId="mlflow-prompts-jump-link" section="prompt-management-page" />
+          <LaunchMlflowButton
+            testId="mlflow-prompts-jump-link"
+            section="prompt-management-page"
+            workspace={workspace}
+          />
         ) : undefined
       }
       keepBodyWrapper={false}

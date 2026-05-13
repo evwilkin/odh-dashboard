@@ -1,3 +1,4 @@
+import { MLflowPromptVersion } from '~/app/types';
 import { ChatbotConfigStore, DEFAULT_CONFIGURATION, McpToolSelectionsMap } from './types';
 
 // Field-specific selectors
@@ -57,6 +58,12 @@ export const selectGuardrailModelOutputEnabled =
     state.configurations[configId]?.guardrailModelOutputEnabled ??
     DEFAULT_CONFIGURATION.guardrailModelOutputEnabled;
 
+export const selectGuardrailSubscription =
+  (configId: string) =>
+  (state: ChatbotConfigStore): string =>
+    state.configurations[configId]?.guardrailSubscription ??
+    DEFAULT_CONFIGURATION.guardrailSubscription;
+
 export const selectRagEnabled =
   (configId: string) =>
   (state: ChatbotConfigStore): boolean =>
@@ -72,6 +79,17 @@ export const selectSelectedVectorStoreId =
   (state: ChatbotConfigStore): string | null =>
     state.configurations[configId]?.selectedVectorStoreId ??
     DEFAULT_CONFIGURATION.selectedVectorStoreId;
+
+// Prompt management selectors
+export const selectActivePrompt =
+  (configId: string) =>
+  (state: ChatbotConfigStore): MLflowPromptVersion | null =>
+    state.configurations[configId]?.activePrompt ?? null;
+
+export const selectDirtyPrompt =
+  (configId: string) =>
+  (state: ChatbotConfigStore): MLflowPromptVersion | null =>
+    state.configurations[configId]?.dirtyPrompt ?? null;
 
 // Configuration management selectors
 export const selectConfigIds = (state: ChatbotConfigStore): string[] => state.configIds;

@@ -34,6 +34,7 @@ import {
   type CreateConnectionData,
 } from './fields/CreateConnectionInputFields';
 import { useProjectSection } from './fields/ProjectSection';
+import { NIMModelLocationKey } from './fields/modelLocationFields/NIMModelLocation';
 import type { ModelServingClusterSettings } from '../../concepts/useModelServingClusterSettings';
 
 export enum ConnectionTypeRefs {
@@ -46,7 +47,14 @@ export enum ModelLocationType {
   NEW = 'new',
   EXISTING = 'existing',
   PVC = 'pvc',
+  NIM = NIMModelLocationKey,
 }
+export const isModelLocationType = (value?: string): value is ModelLocationType => {
+  if (!value) return false;
+  const values: string[] = Object.values(ModelLocationType);
+  return values.includes(value);
+};
+
 export enum ModelLocationSelectOption {
   EXISTING = 'Existing connection',
   PVC = 'Cluster storage',
@@ -87,7 +95,7 @@ export enum YAMLViewerToggleOption {
 }
 
 export type ModelLocationData = {
-  type: ModelLocationType.EXISTING | ModelLocationType.NEW | ModelLocationType.PVC;
+  type: ModelLocationType;
   connectionTypeObject?: ConnectionTypeConfigMapObj;
   connection?: string;
   disableInputFields?: boolean;
@@ -203,10 +211,16 @@ export type DeploymentWizardFieldBase<ID extends DeploymentWizardFieldId | strin
 
 export type GenericFieldProps = {
   isEditing?: boolean;
+  isDisabled?: boolean;
 };
 
 export type WizardStateOverrides = {
   tokenAuthentication?: { isDisabled?: boolean };
+  'llmd-serving/gateway'?: {
+    isDisabled?: boolean;
+    selection?: { name: string; namespace?: string };
+    hiddenOptions?: { name: string; namespace?: string }[];
+  };
 };
 
 export type WizardField<
@@ -232,7 +246,8 @@ export type WizardField<
       wizardState: RecursivePartial<WizardFormData['state']>,
     ) => WizardStateOverrides;
   };
-  externalDataHook?: (initialData?: InitialWizardFormData) => {
+  shouldResetOnDependencyChange?: boolean;
+  externalDataHook?: (dependencies?: Dependencies) => {
     data: ExternalData;
     loaded: boolean;
     loadError?: Error;
@@ -240,11 +255,11 @@ export type WizardField<
   component: React.FC<
     {
       id: string;
-      value: FieldData;
+      value?: FieldData;
+      initialValue?: FieldData;
       onChange: (value: FieldData) => void;
       externalData?: { data: ExternalData; loaded: boolean; loadError?: Error };
       dependencies?: Dependencies;
-      isDisabled?: boolean;
     } & GenericFieldProps
   >;
   getReviewSections?: (
@@ -254,8 +269,11 @@ export type WizardField<
   ) => WizardReviewSection[];
 };
 
-export const resolveFieldValue = (field: WizardField, state: WizardFormData['state']): unknown => {
-  const storedValue: unknown = state[field.id];
+export const resolveFieldValue = (
+  field: WizardField,
+  state: WizardFormData['state'],
+): unknown | undefined => {
+  const storedValue: unknown = field.id in state ? state[field.id] : undefined;
   if (storedValue == null) {
     return undefined;
   }
@@ -268,7 +286,9 @@ export const resolveFieldValue = (field: WizardField, state: WizardFormData['sta
 
 export type ModelServerTemplateField = DeploymentWizardFieldBase<'modelServerTemplate'> & {
   extraOptions?: ModelServerOption[];
-  suggestion?: (clusterSettings?: ModelServingClusterSettings) => ModelServerOption | undefined;
+  suggestion?: (
+    clusterSettings: ModelServingClusterSettings | null | undefined,
+  ) => ModelServerOption | undefined;
 };
 export type ModelAvailabilityField = DeploymentWizardFieldBase<'modelAvailability'> & {
   id: 'modelAvailability';

@@ -14,15 +14,12 @@ import type { PipelineRun } from '~/app/types';
 // Mock Data
 // ============================================================================
 
-const createMockModel = (name: string, metrics: Record<string, number>): AutomlModel => ({
-  display_name: name,
-  model_config: {
-    eval_metric: 'accuracy',
-  },
+const createMockModel = (modelName: string, metrics: Record<string, number>): AutomlModel => ({
+  name: modelName,
   location: {
-    model_directory: `/models/${name}`,
-    predictor: `/models/${name}/predictor`,
-    notebook: `/models/${name}/notebook.ipynb`,
+    model_directory: `/models/${modelName}`,
+    predictor: `/models/${modelName}/predictor`,
+    notebook: `/models/${modelName}/notebook.ipynb`,
   },
   metrics: {
     test_data: metrics,
@@ -64,6 +61,7 @@ describe('getAutomlContext', () => {
         pipelineRunLoading: true,
         models,
         modelsLoading: false,
+        modelsBasePath: undefined,
         parameters: {
           display_name: expect.any(String), // Dynamic timestamp
           description: '',
@@ -93,6 +91,7 @@ describe('getAutomlContext', () => {
         pipelineRunLoading: undefined,
         models: mockModels,
         modelsLoading: undefined,
+        modelsBasePath: undefined,
         parameters: {
           display_name: expect.any(String), // Dynamic timestamp
           description: '',
@@ -130,6 +129,27 @@ describe('getAutomlContext', () => {
       });
 
       expect(context.models).toEqual({});
+    });
+
+    it('should pass through modelsBasePath when provided', () => {
+      const pipelineRun = createMockPipelineRun({ task_type: 'binary' });
+
+      const context = getAutomlContext({
+        pipelineRun,
+        modelsBasePath: 's3://bucket/path/to/models',
+      });
+
+      expect(context.modelsBasePath).toBe('s3://bucket/path/to/models');
+    });
+
+    it('should default modelsBasePath to undefined when not provided', () => {
+      const pipelineRun = createMockPipelineRun();
+
+      const context = getAutomlContext({
+        pipelineRun,
+      });
+
+      expect(context.modelsBasePath).toBeUndefined();
     });
   });
 
@@ -417,7 +437,7 @@ describe('AutomlResultsContext and useAutomlResultsContext', () => {
             <div data-testid="models-count">{Object.keys(context.models).length}</div>
             <div data-testid="model-names">
               {Object.keys(context.models)
-                .map((key) => context.models[key].display_name)
+                .map((key) => context.models[key].name)
                 .join(', ')}
             </div>
           </div>
