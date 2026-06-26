@@ -203,7 +203,7 @@ module.exports = (env) => ({
       },
       {
         test: /\.css$/i,
-        exclude: /node_modules\/monaco-editor/,
+        exclude: /node_modules\/monaco-editor|@patternfly/,
         use: [
           // Creates `style` nodes from JS strings
           'style-loader',

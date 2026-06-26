@@ -293,6 +293,7 @@ module.exports = smp.wrap(
             include: [
               SRC_DIR,
               COMMON_DIR,
+              path.resolve(RELATIVE_DIRNAME, '../node_modules/@patternfly'),
               path.resolve(RELATIVE_DIRNAME, '../node_modules/monaco-editor'),
             ],
             use: ['style-loader', 'css-loader'],
