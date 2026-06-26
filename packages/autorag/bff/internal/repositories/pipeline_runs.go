@@ -37,6 +37,10 @@ func NewValidationError(message string) error {
 	return &ValidationError{Message: message}
 }
 
+// maxRunsPerPipeline caps the total number of runs fetched across all pages for a single pipeline
+// to prevent unbounded memory accumulation when paginating through large result sets.
+const maxRunsPerPipeline = 10000
+
 // PipelineRunsRepository handles business logic for pipeline runs
 type PipelineRunsRepository struct{}
 
@@ -114,6 +118,74 @@ func (r *PipelineRunsRepository) GetPipelineRuns(
 		TotalSize:     kfResponse.TotalSize,
 		NextPageToken: kfResponse.NextPageToken,
 	}, nil
+}
+
+// GetAllPipelineRuns fetches all pages of runs for a single pipeline ID.
+// It auto-paginates through the pipeline server's pages and returns the complete list.
+// pipelineType is set on each returned run to identify the owning pipeline (e.g. "autorag").
+func (r *PipelineRunsRepository) GetAllPipelineRuns(
+	client ps.PipelineServerClientInterface,
+	ctx context.Context,
+	pipelineID string,
+	pipelineType string,
+) ([]models.PipelineRun, error) {
+	if client == nil {
+		return nil, fmt.Errorf("pipeline server client is nil")
+	}
+
+	versionIDs, err := collectVersionIDs(client, ctx, pipelineID)
+	if err != nil {
+		return nil, fmt.Errorf("error collecting pipeline version IDs: %w", err)
+	}
+
+	if len(versionIDs) == 0 {
+		return nil, nil
+	}
+
+	filter, err := buildFilter(versionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("error building filter: %w", err)
+	}
+
+	var allRuns []models.PipelineRun
+	pageToken := ""
+
+	for {
+		params := &ps.ListRunsParams{
+			PageSize:  100,
+			PageToken: pageToken,
+			SortBy:    "created_at desc",
+			Filter:    filter,
+		}
+
+		kfResponse, err := client.ListRuns(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching pipeline runs: %w", err)
+		}
+
+		if kfResponse == nil || len(kfResponse.Runs) == 0 {
+			break
+		}
+
+		remaining := maxRunsPerPipeline - len(allRuns)
+		for i := range kfResponse.Runs {
+			if i >= remaining {
+				break
+			}
+			allRuns = append(allRuns, toPipelineRun(&kfResponse.Runs[i], pipelineType))
+		}
+
+		if len(allRuns) >= maxRunsPerPipeline {
+			break
+		}
+
+		if kfResponse.NextPageToken == "" {
+			break
+		}
+		pageToken = kfResponse.NextPageToken
+	}
+
+	return allRuns, nil
 }
 
 // collectVersionIDs returns all pipeline version IDs for the given pipeline.
@@ -315,8 +387,8 @@ func ValidateCreateAutoRAGRunRequest(req models.CreateAutoRAGRunRequest) error {
 	if req.InputDataKey == "" {
 		missing = append(missing, "input_data_key")
 	}
-	if req.LlamaStackSecretName == "" {
-		missing = append(missing, "llama_stack_secret_name")
+	if req.OGXSecretName == "" {
+		missing = append(missing, "ogx_secret_name")
 	}
 	if len(missing) > 0 {
 		return NewValidationError(fmt.Sprintf("missing required fields: %s", strings.Join(missing, ", ")))
@@ -358,17 +430,17 @@ func ValidateCreateAutoRAGRunRequest(req models.CreateAutoRAGRunRequest) error {
 //   - models.CreatePipelineRunKFRequest: KFP v2beta1 formatted request ready for submission
 func BuildKFPRunRequest(req models.CreateAutoRAGRunRequest, pipelineID, pipelineVersionID string) models.CreatePipelineRunKFRequest {
 	params := map[string]interface{}{
-		"test_data_secret_name":   req.TestDataSecretName,
-		"test_data_bucket_name":   req.TestDataBucketName,
-		"test_data_key":           req.TestDataKey,
-		"input_data_secret_name":  req.InputDataSecretName,
-		"input_data_bucket_name":  req.InputDataBucketName,
-		"input_data_key":          req.InputDataKey,
-		"llama_stack_secret_name": req.LlamaStackSecretName,
+		"test_data_secret_name":  req.TestDataSecretName,
+		"test_data_bucket_name":  req.TestDataBucketName,
+		"test_data_key":          req.TestDataKey,
+		"input_data_secret_name": req.InputDataSecretName,
+		"input_data_bucket_name": req.InputDataBucketName,
+		"input_data_key":         req.InputDataKey,
+		"ogx_secret_name":        req.OGXSecretName,
 	}
 
 	if len(req.EmbeddingsModels) > 0 {
-		params["embeddings_models"] = req.EmbeddingsModels
+		params["embedding_models"] = req.EmbeddingsModels
 	}
 	if len(req.GenerationModels) > 0 {
 		params["generation_models"] = req.GenerationModels
@@ -380,8 +452,8 @@ func BuildKFPRunRequest(req models.CreateAutoRAGRunRequest, pipelineID, pipeline
 	}
 	params["optimization_metric"] = metric
 
-	if req.LlamaStackVectorIOProviderID != "" {
-		params["llama_stack_vector_io_provider_id"] = req.LlamaStackVectorIOProviderID
+	if req.VectorIOProviderID != "" {
+		params["vector_io_provider_id"] = req.VectorIOProviderID
 	}
 
 	if req.OptimizationMaxRagPatterns != nil {

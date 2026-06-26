@@ -1,7 +1,17 @@
 import * as React from 'react';
+import {
+  Bullseye,
+  Button,
+  EmptyState,
+  EmptyStateActions,
+  EmptyStateBody,
+  EmptyStateFooter,
+  EmptyStateVariant,
+} from '@patternfly/react-core';
 import { Td, Tr } from '@patternfly/react-table';
+import { SearchIcon } from '@patternfly/react-icons';
 import { Link } from 'react-router';
-import Table from '@odh-dashboard/internal/components/table/Table';
+import { Table } from '@odh-dashboard/ui-core';
 import { FeatureView } from '../../../types/featureView';
 import { FeatureStoreToolbar } from '../../../components/FeatureStoreToolbar';
 import { useFeatureStoreProject } from '../../../FeatureStoreContext';
@@ -95,7 +105,32 @@ const FeatureViewSchemaTable: React.FC<FeatureViewSchemaTableProps> = ({ feature
       enablePagination
       data={filteredSchemaData}
       columns={schemaColumns}
-      emptyTableView={<div>No schema data available</div>}
+      emptyTableView={
+        <Bullseye>
+          <EmptyState
+            headingLevel="h6"
+            icon={SearchIcon}
+            titleText={
+              schemaData.length === 0 ? 'No schema data available' : 'No results match your filters'
+            }
+            variant={EmptyStateVariant.lg}
+            data-testid="feature-view-schema-empty-state"
+          >
+            {schemaData.length > 0 && filteredSchemaData.length === 0 && (
+              <>
+                <EmptyStateBody>Adjust or clear your filters to see schema rows.</EmptyStateBody>
+                <EmptyStateFooter>
+                  <EmptyStateActions>
+                    <Button variant="link" onClick={onClearFilters}>
+                      Clear filters
+                    </Button>
+                  </EmptyStateActions>
+                </EmptyStateFooter>
+              </>
+            )}
+          </EmptyState>
+        </Bullseye>
+      }
       rowRenderer={(item, index) => (
         <SchemaTableRow key={`${item.column}-${index}`} item={item} featureView={featureView} />
       )}

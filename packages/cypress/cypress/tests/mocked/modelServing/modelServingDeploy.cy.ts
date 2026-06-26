@@ -6,7 +6,8 @@ import { mock404Error } from '@odh-dashboard/internal/__mocks__/mockK8sStatus';
 import { mockProjectK8sResource } from '@odh-dashboard/internal/__mocks__/mockProjectK8sResource';
 import { mockServingRuntimeK8sResource } from '@odh-dashboard/internal/__mocks__/mockServingRuntimeK8sResource';
 import { mockStandardModelServingTemplateK8sResources } from '@odh-dashboard/internal/__mocks__/mockServingRuntimeTemplateK8sResource';
-import { IdentifierResourceType, ServingRuntimeModelType } from '@odh-dashboard/internal/types';
+import { IdentifierResourceType, KnownLabels } from '@odh-dashboard/k8s-core';
+import { ServingRuntimeModelType } from '@odh-dashboard/internal/types';
 import {
   mockGlobalScopedHardwareProfiles,
   mockHardwareProfile,
@@ -16,7 +17,7 @@ import {
   mockModelServingFields,
   mockOciConnectionTypeConfigMap,
 } from '@odh-dashboard/internal/__mocks__/mockConnectionType';
-import { DataScienceStackComponent } from '@odh-dashboard/internal/concepts/areas/types';
+import { DataScienceStackComponent } from '@odh-dashboard/plugin-core/areas';
 import {
   mockCustomSecretK8sResource,
   mockURISecretK8sResource,
@@ -29,7 +30,6 @@ import {
   ModelLocationSelectOption,
   ModelTypeLabel,
 } from '@odh-dashboard/model-serving/types/form-data';
-import { KnownLabels } from '@odh-dashboard/internal/k8sTypes';
 import {
   initMockConnectionSecretIntercepts,
   initMockModelAuthIntercepts,
@@ -71,7 +71,7 @@ const initIntercepts = ({
         [DataScienceStackComponent.K_SERVE]: { managementState: 'Managed' },
         // Gen AI plugin registers PLUGIN_GEN_AI with this required component; without it the
         // save-as-ai-asset UI stays hidden while genAiStudio is still true in dashboard config.
-        [DataScienceStackComponent.LLAMA_STACK_OPERATOR]: { managementState: 'Managed' },
+        [DataScienceStackComponent.OGX_OPERATOR]: { managementState: 'Managed' },
       },
     }),
   );
@@ -376,8 +376,6 @@ describe('Model Serving Deploy Wizard', () => {
       .should('exist')
       .click();
     modelServingWizard.findSaveConnectionCheckbox().should('not.exist');
-
-    modelServingWizard.findLegacyModeCheckbox().should('exist').click();
     modelServingWizard.findNextButton().should('be.enabled').click();
 
     // Step 2: Model deployment
@@ -386,6 +384,7 @@ describe('Model Serving Deploy Wizard', () => {
     modelServingWizard.findNextButton().should('be.disabled');
     modelServingWizard.findModelDeploymentNameInput().type('test-model');
     modelServingWizard.findModelDeploymentDescriptionInput().type('test-description');
+    modelServingWizard.selectDeploymentMethodByKey('legacy');
     hardwareProfileSection.findSelect().should('contain.text', 'Small');
 
     // Generative has no model format select (they are all vLLM)
@@ -1481,13 +1480,16 @@ describe('Model Serving Deploy Wizard', () => {
       .should('have.text', ModelTypeLabel.GENERATIVE)
       .should('be.disabled');
 
-    modelServingWizardEdit.findLegacyModeCheckbox().should('be.checked').should('be.disabled');
     modelServingWizardEdit.findNextButton().should('be.enabled').click();
 
     // Step 2: Model deployment
     modelServingWizardEdit
       .findModelDeploymentDescriptionInput()
       .should('contain.text', 'test-description');
+    modelServingWizardEdit
+      .findDeploymentMethodSelect()
+      .should('be.disabled')
+      .should('contain.text', 'Legacy deployment');
     modelServingWizardEdit.findModelDeploymentStep().should('be.enabled');
     modelServingWizardEdit.findNextButton().should('be.enabled');
 
@@ -1548,12 +1550,7 @@ describe('Model Serving Deploy Wizard', () => {
 
     // Step 2: Model deployment
     hardwareProfileSection.findSelect().should('contain.text', 'Large Profile');
-    hardwareProfileSection.findCustomizeButton().should('exist').click();
-    // Wait for the ExpandableSection to be fully expanded before interacting with its contents.
-    // PatternFly v6 overrides display:none on [hidden] elements, so .should('be.visible') passes
-    // even when the section is still collapsed. The aria-expanded attribute is the correct signal
-    // that the React state update has completed and the hidden attribute has been removed.
-    hardwareProfileSection.findCustomizeButton().should('have.attr', 'aria-expanded', 'true');
+    hardwareProfileSection.expandCustomizeSection();
     modelServingWizardEdit.findCPURequestedInput().should('have.value', '6');
     modelServingWizardEdit.findCPULimitInput().should('have.value', '6');
     modelServingWizardEdit.findMemoryRequestedInput().should('have.value', '10');
@@ -1630,7 +1627,18 @@ describe('Model Serving Deploy Wizard', () => {
 
     modelServingWizard.visit();
 
-    // Step 1: Model source
+    // Step 1: Preconfigure deployment (shown because no project is pre-selected)
+    modelServingWizard.findPreconfigureStep().should('be.enabled');
+    modelServingWizard.findModelSourceStep().should('be.disabled');
+    modelServingWizard.findNextButton().should('be.disabled');
+    modelServingWizard.findPreconfigureProjectSelector().click();
+    modelServingWizard
+      .findPreconfigureProjectSelectorOption('Test Project')
+      .should('exist')
+      .click();
+    modelServingWizard.findNextButton().should('be.enabled').click();
+
+    // Step 2: Model source
     modelServingWizard.findModelSourceStep().should('be.enabled');
     modelServingWizard.findModelDeploymentStep().should('be.disabled');
     modelServingWizard.findNextButton().should('be.disabled');
@@ -1648,37 +1656,29 @@ describe('Model Serving Deploy Wizard', () => {
     modelServingWizard.findSaveConnectionCheckbox().should('not.be.checked');
     modelServingWizard.findNextButton().should('be.enabled').click();
 
-    // Step 2: Model deployment
+    // Step 3: Model deployment (project selector hidden, project was selected in preconfigure step)
     modelServingWizard.findModelDeploymentStep().should('be.enabled');
     modelServingWizard.findAdvancedOptionsStep().should('be.disabled');
     modelServingWizard.findNextButton().should('be.disabled');
-    modelServingWizard.findModelDeploymentProjectSelector().should('exist');
-    modelServingWizard
-      .findModelDeploymentProjectSelector()
-      .should('contain.text', 'Select target project');
-    modelServingWizard.findModelDeploymentProjectSelector().click();
-    modelServingWizard
-      .findModelDeploymentProjectSelectorOption('Test Project')
-      .should('exist')
-      .click();
     modelServingWizard.findModelDeploymentNameInput().type('test-model');
+    modelServingWizard.selectDeploymentMethodByKey('legacy');
     hardwareProfileSection.findSelect().should('contain.text', 'Small');
 
     modelServingWizard.findModelFormatSelect().should('not.exist');
     modelServingWizard.findServingRuntimeTemplateSearchSelector().should('exist');
     modelServingWizard.findServingRuntimeTemplateSearchSelector().click();
-    modelServingWizard.findGlobalScopedTemplateOption('vLLM NVIDIA').should('exist').click();
+    modelServingWizard.selectGlobalScopedTemplateOption('vLLM NVIDIA');
 
     modelServingWizard.findNumReplicasInput().should('exist');
     modelServingWizard.findNumReplicasInputField().should('have.value', '1');
 
     modelServingWizard.findNextButton().should('be.enabled').click();
 
-    // Step 3: Advanced Options
+    // Step 4: Advanced Options
     modelServingWizard.findAdvancedOptionsStep().should('be.enabled');
     modelServingWizard.findNextButton().should('be.enabled').click();
 
-    // Step 4: Summary
+    // Step 5: Summary
     modelServingWizard.findSubmitButton().should('be.enabled').click();
 
     cy.wait('@createSecret').then((interception) => {
@@ -1823,17 +1823,13 @@ describe('Model Serving Deploy Wizard', () => {
       modelServingWizard.findSaveConnectionCheckbox().click();
       modelServingWizard.findNextButton().should('be.enabled').click();
       modelServingWizard.findModelDeploymentNameInput().type('test-model');
-      modelServingWizard.findServingRuntimeTemplateSearchSelector().click();
-      modelServingWizard
-        .findGlobalScopedTemplateOption('Distributed inference with llm-d')
-        .should('exist')
-        .click();
+      modelServingWizard.selectDeploymentMethodByKey('llm-inference-service-llmd');
 
       // Verify yaml preview contents (use .contains() command, not .should('contain.text'),
       // because cy.contains() normalizes &nbsp; to regular spaces while the assertion does not)
       modelServingWizard.findYAMLViewerToggle('YAML').should('exist').click();
       const yamlEditor = modelServingWizard.findYAMLCodeEditor();
-      yamlEditor.containsText('apiVersion: serving.kserve.io/v1alpha1');
+      yamlEditor.containsText('apiVersion: serving.kserve.io/v1alpha2');
       yamlEditor.containsText('kind: LLMInferenceService');
       yamlEditor.containsText('name: test-model');
     });
@@ -1877,11 +1873,7 @@ describe('Model Serving Deploy Wizard', () => {
 
       // Step 2: Model deployment - set name and choose the LLMd runtime
       modelServingWizard.findModelDeploymentNameInput().type('test-model');
-      modelServingWizard.findServingRuntimeTemplateSearchSelector().click();
-      modelServingWizard
-        .findGlobalScopedTemplateOption('Distributed inference with llm-d')
-        .should('exist')
-        .click();
+      modelServingWizard.selectDeploymentMethodByKey('llm-inference-service-llmd');
       modelServingWizard.findNextButton().should('be.enabled').click();
 
       // Step 3: Advanced options
@@ -1912,7 +1904,7 @@ describe('Model Serving Deploy Wizard', () => {
       cy.wait('@createLLMInferenceService').then((interception) => {
         expect(interception.request.url).to.include('?dryRun=All');
         expect(interception.request.body.kind).to.equal('LLMInferenceService');
-        expect(interception.request.body.apiVersion).to.equal('serving.kserve.io/v1alpha1');
+        expect(interception.request.body.apiVersion).to.equal('serving.kserve.io/v1alpha2');
         expect(interception.request.body.metadata.name).to.equal('yaml-edited-model');
         expect(interception.request.body.metadata.namespace).to.equal('test-project');
       });
@@ -1993,7 +1985,7 @@ describe('Model Serving Deploy Wizard', () => {
 
       // Set a valid LLMInferenceService YAML
       const yamlContent = [
-        'apiVersion: serving.kserve.io/v1alpha1',
+        'apiVersion: serving.kserve.io/v1alpha2',
         'kind: LLMInferenceService',
         'metadata:',
         '  name: yaml-only-model',
@@ -2012,7 +2004,7 @@ describe('Model Serving Deploy Wizard', () => {
       cy.wait('@createLLMInferenceService').then((interception) => {
         expect(interception.request.url).to.include('?dryRun=All');
         expect(interception.request.body.kind).to.equal('LLMInferenceService');
-        expect(interception.request.body.apiVersion).to.equal('serving.kserve.io/v1alpha1');
+        expect(interception.request.body.apiVersion).to.equal('serving.kserve.io/v1alpha2');
         expect(interception.request.body.metadata.name).to.equal('yaml-only-model');
         expect(interception.request.body.metadata.namespace).to.equal('test-project');
         expect(interception.request.body.spec.model.uri).to.equal('hf://test/model');
@@ -2161,6 +2153,7 @@ describe('Model Serving Deploy Wizard', () => {
       modelServingWizard.findNextButton().click();
 
       // Step 6: Verify selection is cleared when model type changes
+      modelServingWizard.selectDeploymentMethodByKey('legacy');
       modelServingWizard
         .findServingRuntimeTemplateSearchSelector()
         .should('contain.text', 'Select one');

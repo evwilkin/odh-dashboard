@@ -92,14 +92,9 @@ class AutomlConfigurePage {
     return cy.findByTestId(`task-type-card-${type}`);
   }
 
-  // Tabular fields (binary, multiclass, regression)
-  findLabelColumnSelect() {
-    return cy.findByTestId('label_column-select');
-  }
-
-  // Timeseries fields
+  // Target column (shared across all task types)
   findTargetColumnSelect() {
-    return cy.findByTestId('target-select');
+    return cy.findByTestId('target_column-select');
   }
 
   findTimestampColumnSelect() {
@@ -108,6 +103,36 @@ class AutomlConfigurePage {
 
   findIdColumnSelect() {
     return cy.findByTestId('id_column-select');
+  }
+
+  // Preset
+  findPresetRadio(preset: string) {
+    return cy.findByTestId(`preset-radio-${preset}`);
+  }
+
+  // Optimization metric
+  findOptimizationMetricCard() {
+    return cy.findByTestId('optimization-metric-card');
+  }
+
+  findOptimizationMetricValue() {
+    return cy.findByTestId('optimization-metric-value');
+  }
+
+  findOptimizationMetricEditButton() {
+    return cy.findByTestId('optimization-metric-edit');
+  }
+
+  findOptimizationMetricModal() {
+    return cy.findByTestId('optimization-metric-modal');
+  }
+
+  findEvalMetricRadio(metric: string) {
+    return cy.findByTestId(`eval-metric-radio-${metric}`);
+  }
+
+  findOptimizationMetricSaveButton() {
+    return cy.findByTestId('optimization-metric-save');
   }
 
   // Top N models

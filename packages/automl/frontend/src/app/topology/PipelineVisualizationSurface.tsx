@@ -3,6 +3,8 @@ import {
   action,
   createTopologyControlButtons,
   defaultControlButtonsOptions,
+  DEFAULT_EDGE_TYPE,
+  DEFAULT_SPACER_NODE_TYPE,
   getEdgesFromNodes,
   PipelineNodeModel,
   TopologyControlBar,
@@ -13,6 +15,7 @@ import {
 } from '@patternfly/react-topology';
 import { EmptyState, EmptyStateBody } from '@patternfly/react-core';
 import { ExclamationCircleIcon } from '@patternfly/react-icons';
+import { PIPELINE_TOPOLOGY_FIT_PADDING } from './const';
 
 type PipelineVisualizationSurfaceProps = {
   nodes: PipelineNodeModel[];
@@ -25,6 +28,25 @@ const PipelineVisualizationSurface: React.FC<PipelineVisualizationSurfaceProps> 
 }) => {
   const controller = useVisualizationController();
   const [error, setError] = React.useState<Error | null>();
+  const prevWidthsRef = React.useRef<string>('');
+  const userInteractedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const graph = controller.getGraph();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- graph may not be initialized yet
+    if (!graph) {
+      return undefined;
+    }
+    const onInteraction = () => {
+      userInteractedRef.current = true;
+    };
+    graph.getController().addEventListener('pan', onInteraction);
+    graph.getController().addEventListener('zoom', onInteraction);
+    return () => {
+      graph.getController().removeEventListener('pan', onInteraction);
+      graph.getController().removeEventListener('zoom', onInteraction);
+    };
+  }, [controller]);
 
   React.useEffect(() => {
     try {
@@ -38,9 +60,24 @@ const PipelineVisualizationSurface: React.FC<PipelineVisualizationSurfaceProps> 
       });
 
       const renderNodes = addSpacerNodes(updateNodes);
-      const edges = getEdgesFromNodes(renderNodes);
+      const edges = getEdgesFromNodes(renderNodes, DEFAULT_SPACER_NODE_TYPE, DEFAULT_EDGE_TYPE);
 
+      const widthKey = nodes.map((n) => `${n.id}:${n.width}`).join(',');
+      const needsRelayout = prevWidthsRef.current !== '' && prevWidthsRef.current !== widthKey;
+      prevWidthsRef.current = widthKey;
+
+      const graph = controller.getGraph();
       controller.fromModel({ nodes: renderNodes, edges }, true);
+
+      if (needsRelayout) {
+        graph.layout();
+        if (!userInteractedRef.current) {
+          graph.fit(PIPELINE_TOPOLOGY_FIT_PADDING);
+        } else {
+          // User has panned/zoomed — preserve their viewport
+        }
+      }
+
       setError(null);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
@@ -93,7 +130,7 @@ const PipelineVisualizationSurface: React.FC<PipelineVisualizationSurfaceProps> 
               if (!graph) {
                 return;
               }
-              graph.fit(80);
+              graph.fit(PIPELINE_TOPOLOGY_FIT_PADDING);
             }),
             resetViewCallback: action(() => {
               const graph = controller.getGraph();

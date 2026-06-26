@@ -1,3 +1,4 @@
+/* eslint-disable camelcase -- test data matches API response field names */
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
@@ -144,12 +145,14 @@ describe('useS3GetFileSchemaQuery', () => {
   });
 
   it('should parse response data correctly', async () => {
+    /* eslint-disable camelcase -- matches API response field name */
     const mockColumns = [
-      { name: 'id', type: 'integer' },
-      { name: 'name', type: 'string' },
-      { name: 'age', type: 'double' },
-      { name: 'status', type: 'string', values: ['active', 'inactive'] },
+      { name: 'id', type: 'integer', task_type: 'binary' },
+      { name: 'name', type: 'string', task_type: 'multiclass' },
+      { name: 'age', type: 'double', task_type: 'regression' },
+      { name: 'status', type: 'string', task_type: 'binary', values: ['active', 'inactive'] },
     ];
+    /* eslint-enable camelcase */
 
     const mockResponse = {
       data: {
@@ -519,13 +522,13 @@ describe('AutomlModelSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject a unified 3.5 model that includes base_model', () => {
-    const invalid = {
+  it('should accept a unified 3.5 model with extra fields like base_model', () => {
+    const extended = {
       ...validUnifiedModel,
       base_model: 'gpt-4',
     };
-    const result = AutomlModelSchema.safeParse(invalid);
-    expect(result.success).toBe(false);
+    const result = AutomlModelSchema.safeParse(extended);
+    expect(result.success).toBe(true);
   });
 
   it('should parse a v3.4 tabular model with extra metrics in location as v3.5', () => {
@@ -644,6 +647,16 @@ describe('isRawModelV35', () => {
 });
 /* eslint-enable camelcase */
 
+// jsdom's Blob lacks .text() — polyfill so fetchS3Json can decode streamed Blobs
+Blob.prototype.text = function blobText() {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(this);
+  });
+};
+
 /* eslint-disable camelcase */
 describe('useModelEvaluationArtifactsQuery', () => {
   const mockFeatureImportance = {
@@ -661,9 +674,23 @@ describe('useModelEvaluationArtifactsQuery', () => {
    */
   const mockBlobJsonResponse = (data: unknown) => {
     const json = JSON.stringify(data);
+    const encoded = new TextEncoder().encode(json);
+    let done = false;
     return {
       ok: true,
-      blob: async () => ({ text: async () => json }),
+      headers: new Headers({ 'Content-Length': String(encoded.byteLength) }),
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (done) {
+              return { done: true, value: undefined };
+            }
+            done = true;
+            return { done: false, value: encoded };
+          },
+        }),
+      },
+      blob: async () => ({ size: encoded.byteLength, text: async () => json }),
     };
   };
 

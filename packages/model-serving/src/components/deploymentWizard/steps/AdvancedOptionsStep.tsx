@@ -1,10 +1,6 @@
 import React from 'react';
-import {
-  AccessReviewResourceAttributes,
-  K8sDSGResource,
-  ServingContainer,
-  ServingRuntimeKind,
-} from '@odh-dashboard/internal/k8sTypes';
+import type { K8sDSGResource, AccessReviewResourceAttributes } from '@odh-dashboard/k8s-core';
+import { ServingContainer, ServingRuntimeKind } from '@odh-dashboard/internal/k8sTypes';
 // eslint-disable-next-line @odh-dashboard/no-restricted-imports
 import { isServingRuntimeKind } from '@odh-dashboard/internal/pages/modelServing/customServingRuntimes/utils';
 import {
@@ -52,7 +48,7 @@ export const AdvancedSettingsStepContent: React.FC<AdvancedSettingsStepContentPr
   // TODO: Clean up the stuff below related to KServe. Maybe move to an extension?
   const selectedModelServer = React.useMemo(() => {
     const templates = wizardState.state.modelFormatState.templatesFilteredForModelType;
-    const modelServerData = wizardState.state.modelServer.data;
+    const modelServerData = wizardState.state.modelServer?.data;
     if (!modelServerData || !templates || templates.length === 0) {
       return undefined;
     }
@@ -63,7 +59,7 @@ export const AdvancedSettingsStepContent: React.FC<AdvancedSettingsStepContentPr
     return template?.objects[0];
   }, [
     wizardState.state.modelFormatState.templatesFilteredForModelType,
-    wizardState.state.modelServer.data,
+    wizardState.state.modelServer?.data,
   ]);
 
   const getKServeContainer = (

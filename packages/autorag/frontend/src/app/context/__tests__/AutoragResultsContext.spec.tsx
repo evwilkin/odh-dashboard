@@ -110,10 +110,10 @@ describe('getAutoragContext', () => {
           test_data_secret_name: '',
           test_data_bucket_name: '',
           test_data_key: '',
-          llama_stack_secret_name: '',
-          llama_stack_vector_io_provider_id: '',
+          ogx_secret_name: '',
+          vector_io_provider_id: '',
           generation_models: [],
-          embeddings_models: [],
+          embedding_models: [],
           optimization_metric: 'faithfulness',
           optimization_max_rag_patterns: 8,
         },
@@ -141,10 +141,10 @@ describe('getAutoragContext', () => {
           test_data_secret_name: '',
           test_data_bucket_name: '',
           test_data_key: '',
-          llama_stack_secret_name: '',
-          llama_stack_vector_io_provider_id: '',
+          ogx_secret_name: '',
+          vector_io_provider_id: '',
           generation_models: [],
-          embeddings_models: [],
+          embedding_models: [],
           optimization_metric: 'faithfulness',
           optimization_max_rag_patterns: 8,
         },
@@ -185,9 +185,9 @@ describe('getAutoragContext', () => {
         test_data_secret_name: 'test-secret',
         test_data_bucket_name: 'test-bucket',
         test_data_key: 'test.csv',
-        llama_stack_secret_name: 'llama-secret',
+        ogx_secret_name: 'ogx-secret',
         generation_models: ['llama-3', 'gpt-4'],
-        embeddings_models: ['text-embedding-3'],
+        embedding_models: ['text-embedding-3'],
         optimization_metric: 'faithfulness',
         optimization_max_rag_patterns: 12,
       });
@@ -205,10 +205,10 @@ describe('getAutoragContext', () => {
         test_data_secret_name: 'test-secret',
         test_data_bucket_name: 'test-bucket',
         test_data_key: 'test.csv',
-        llama_stack_secret_name: 'llama-secret',
-        llama_stack_vector_io_provider_id: '',
+        ogx_secret_name: 'ogx-secret',
+        vector_io_provider_id: '',
         generation_models: ['llama-3', 'gpt-4'],
-        embeddings_models: ['text-embedding-3'],
+        embedding_models: ['text-embedding-3'],
         optimization_metric: 'faithfulness',
         optimization_max_rag_patterns: 12,
       });
@@ -235,10 +235,10 @@ describe('getAutoragContext', () => {
         test_data_secret_name: '',
         test_data_bucket_name: '',
         test_data_key: '',
-        llama_stack_secret_name: '',
-        llama_stack_vector_io_provider_id: '',
+        ogx_secret_name: '',
+        vector_io_provider_id: '',
         generation_models: [],
-        embeddings_models: [],
+        embedding_models: [],
         optimization_metric: 'faithfulness',
         optimization_max_rag_patterns: 8,
       });
@@ -260,10 +260,10 @@ describe('getAutoragContext', () => {
         test_data_secret_name: '',
         test_data_bucket_name: '',
         test_data_key: '',
-        llama_stack_secret_name: '',
-        llama_stack_vector_io_provider_id: '',
+        ogx_secret_name: '',
+        vector_io_provider_id: '',
         generation_models: [],
-        embeddings_models: [],
+        embedding_models: [],
         optimization_metric: 'faithfulness',
         optimization_max_rag_patterns: 8,
       });
@@ -322,6 +322,38 @@ describe('getAutoragContext', () => {
 
       expect(context.pipelineRunLoading).toBeUndefined();
       expect(context.patternsLoading).toBeUndefined();
+    });
+  });
+
+  describe('componentStageMap fields', () => {
+    it('should pass through componentStageMap when provided', () => {
+      const mockStageMap = {
+        pipeline_id: 'test',
+        description: 'test',
+        components: [],
+        kfp_run_id: 'run-1',
+        published_at: '2026-01-01T00:00:00Z',
+      };
+      const context = getAutoragContext({
+        pipelineRun: createMockPipelineRun(),
+        componentStageMap: mockStageMap,
+        componentStageMapLoading: false,
+        componentStageMapError: false,
+      });
+
+      expect(context.componentStageMap).toBe(mockStageMap);
+      expect(context.componentStageMapLoading).toBe(false);
+      expect(context.componentStageMapError).toBe(false);
+    });
+
+    it('should default componentStageMap fields to undefined when not provided', () => {
+      const context = getAutoragContext({
+        pipelineRun: createMockPipelineRun(),
+      });
+
+      expect(context.componentStageMap).toBeUndefined();
+      expect(context.componentStageMapLoading).toBeUndefined();
+      expect(context.componentStageMapError).toBeUndefined();
     });
   });
 });

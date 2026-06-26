@@ -9,7 +9,7 @@ import type {
   S3ListObjectsResponse,
 } from '~/app/types';
 import { URL_PREFIX } from '~/app/utilities/const';
-import { parseErrorStatus } from '~/app/utilities/utils';
+import { isRunInTerminalState, parseErrorStatus } from '~/app/utilities/utils';
 
 export function useExperimentsQuery(): UseQueryResult<never[], Error> {
   return useQuery({
@@ -35,9 +35,13 @@ export function useExperimentQuery(
   });
 }
 
+export type TaskType = 'binary' | 'multiclass' | 'regression';
+
 export type ColumnSchema = {
   name: string;
-  type: 'integer' | 'double' | 'int64' | 'float64' | 'timestamp' | 'bool' | 'string';
+  type: 'integer' | 'double' | 'timestamp' | 'bool' | 'string';
+  task_type: TaskType;
+  unique_count?: number;
   values?: (string | number)[];
 };
 
@@ -47,7 +51,11 @@ export type ColumnSchema = {
 const ColumnSchemaArraySchema = z.array(
   z.object({
     name: z.string(),
-    type: z.enum(['integer', 'double', 'int64', 'float64', 'timestamp', 'bool', 'string']),
+    type: z.enum(['integer', 'double', 'timestamp', 'bool', 'string']),
+    // eslint-disable-next-line camelcase -- matches API response field name
+    task_type: z.enum(['binary', 'multiclass', 'regression']),
+    // eslint-disable-next-line camelcase -- matches API response field name
+    unique_count: z.number().int().nonnegative().optional(),
     values: z.array(z.union([z.string(), z.number()])).optional(),
   }),
 );
@@ -56,6 +64,7 @@ type FetchS3FileOptions = {
   secretName?: string;
   bucket?: string;
   signal?: AbortSignal;
+  maxBytes?: number;
 };
 
 /**
@@ -71,16 +80,21 @@ export async function fetchS3File(
     throw new Error('File key must be a non-empty string');
   }
 
-  const { secretName, bucket, signal } = options ?? {};
+  const { secretName, bucket, signal, maxBytes } = options ?? {};
   const params = new URLSearchParams({
     namespace,
     ...(secretName && { secretName }),
     ...(bucket && { bucket }),
   });
 
+  const abortController = maxBytes != null ? new AbortController() : undefined;
+  const combinedSignal = abortController
+    ? AbortSignal.any([abortController.signal, ...(signal ? [signal] : [])])
+    : signal;
+
   const response = await fetch(
     `${URL_PREFIX}/api/v1/s3/files/${encodeURIComponent(key)}?${params.toString()}`,
-    { signal },
+    { signal: combinedSignal },
   );
 
   if (!response.ok) {
@@ -94,6 +108,43 @@ export async function fetchS3File(
       // If parsing fails, fall back to statusText
     }
     throw new Error(`Failed to fetch file: ${errorMessage}`);
+  }
+
+  if (maxBytes != null) {
+    const contentLength = response.headers.get('Content-Length');
+    if (contentLength != null && parseInt(contentLength, 10) > maxBytes) {
+      abortController?.abort();
+      throw new Error(
+        `S3 file too large: ${contentLength} bytes exceeds limit of ${maxBytes} bytes`,
+      );
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return response.blob();
+    }
+
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      received += value.byteLength;
+      if (received > maxBytes) {
+        abortController?.abort();
+        throw new Error(`S3 file too large: exceeded limit of ${maxBytes} bytes during download`);
+      }
+      chunks.push(value);
+    }
+    const combined = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new Blob([combined]);
   }
 
   return response.blob();
@@ -160,7 +211,7 @@ export function useS3GetFileSchemaQuery(
       const columns = result?.data?.columns;
 
       if (!Array.isArray(columns)) {
-        return [];
+        throw new Error('Unexpected API response: column data is missing or invalid');
       }
 
       try {
@@ -205,9 +256,6 @@ export function useS3ListFilesQuery(
   });
 }
 
-const TERMINAL_STATES = new Set(['SUCCEEDED', 'FAILED', 'CANCELED', 'SKIPPED', 'CACHED']);
-
-export const isTerminalState = (state: string): boolean => TERMINAL_STATES.has(state);
 const POLL_INTERVAL_MS = 10000;
 const RETRY_DELAY_MS = 5000;
 const MAX_RETRY_ATTEMPTS = 5;
@@ -240,7 +288,7 @@ export function usePipelineRunQuery(
         return false;
       }
       const state = query.state.data?.state;
-      if (!state || isTerminalState(state)) {
+      if (!state || isRunInTerminalState(state)) {
         return false;
       }
       return POLL_INTERVAL_MS;
@@ -278,16 +326,19 @@ const ConfusionMatrixDataSchema = z.record(z.string(), z.record(z.string(), z.nu
  * @param options.schema - Optional Zod schema for runtime validation
  * @returns Parsed JSON cast to type T (validated if schema provided)
  */
+const DEFAULT_MAX_JSON_BYTES = 50 * 1024 * 1024; // 50 MB
+
 export async function fetchS3Json<T>(
   namespace: string,
   key: string,
   options?: {
     signal?: AbortSignal;
     schema?: z.ZodSchema<T>;
+    maxBytes?: number;
   },
 ): Promise<T> {
-  const { signal, schema } = options ?? {};
-  const blob = await fetchS3File(namespace, key, { signal });
+  const { signal, schema, maxBytes = DEFAULT_MAX_JSON_BYTES } = options ?? {};
+  const blob = await fetchS3File(namespace, key, { signal, maxBytes });
   const text = await blob.text();
 
   try {
@@ -308,7 +359,9 @@ export async function fetchS3Json<T>(
       throw new Error(`Invalid JSON structure from S3 file "${key}": ${issues}`);
     }
     throw new Error(
-      `Failed to parse JSON from S3 file "${key}": ${error instanceof Error ? error.message : 'Invalid JSON'}`,
+      `Failed to parse JSON from S3 file "${key}": ${
+        error instanceof Error ? error.message : 'Invalid JSON'
+      }`,
     );
   }
 }
@@ -325,13 +378,13 @@ export async function fetchS3Json<T>(
  */
 /* eslint-disable camelcase */
 
-const AutomlModelBaseSchema = z.strictObject({
+const AutomlModelBaseSchema = z.object({
   name: z.string(),
-  location: z.strictObject({
+  location: z.object({
     model_directory: z.string().optional(),
     predictor: z.string(),
   }),
-  metrics: z.strictObject({
+  metrics: z.object({
     test_data: z.record(z.string(), z.number()),
   }),
 });
@@ -341,7 +394,7 @@ const AutomlTabularModelSchemaV34 = AutomlModelBaseSchema.extend({
   location: AutomlModelBaseSchema.shape.location.extend({
     notebook: z.string(),
   }),
-}).strict();
+});
 
 // Legacy timeseries schema (pre-3.5): notebooks plural (directory), base_model, metrics in location
 const AutomlTimeseriesModelSchemaV34 = AutomlModelBaseSchema.extend({
@@ -350,18 +403,18 @@ const AutomlTimeseriesModelSchemaV34 = AutomlModelBaseSchema.extend({
     notebooks: z.string(),
     metrics: z.string(),
   }),
-}).strict();
+});
 
 // Unified schema (3.5+): notebook singular (file path), metrics in location, no base_model
 const AutomlModelSchemaV35 = AutomlModelBaseSchema.extend({
   location: AutomlModelBaseSchema.shape.location.extend({
     notebook: z.string(),
     metrics: z.string(),
+    back_testing: z.string().optional(), // added in 3.5 EA2
   }),
-}).strict();
+});
 
 // Try 3.5 first, then fall back to legacy schemas for backwards compatibility.
-// strict() on each schema is what disambiguates V35 from V34 tabular (both have `notebook`).
 export const AutomlModelSchema = z.union([
   AutomlModelSchemaV35,
   AutomlTimeseriesModelSchemaV34,

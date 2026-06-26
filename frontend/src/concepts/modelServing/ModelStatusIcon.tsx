@@ -7,8 +7,8 @@ import {
   OffIcon,
   OutlinedQuestionCircleIcon,
 } from '@patternfly/react-icons';
+import type { ToggleState } from '@odh-dashboard/ui-core';
 import { ModelDeploymentState } from '#~/pages/modelServing/screens/types';
-import { ToggleState } from '#~/components/StateActionToggle';
 
 type ModelStatusIconProps = {
   state: ModelDeploymentState;
@@ -51,7 +51,8 @@ export const ModelStatusIcon: React.FC<ModelStatusIconProps> = ({
         label: 'Stopping',
         color: 'grey',
         icon: <InProgressIcon className="ai-u-spin" />,
-        message: 'Model deployment is stopping.',
+        message:
+          'Waiting for the deployment to stop. You can still delete or restart the deployment.',
       };
     }
     // Show 'Starting' for optimistic updates or for loading/pending states from the backend.

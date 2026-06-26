@@ -7,7 +7,8 @@ import { useWizardFieldPostDeploy } from './useWizardFieldPostDeploy';
 import { ModelDeploymentWizardValidation } from '../useDeploymentWizardValidation';
 import { useWizardFieldApply } from '../useWizardFieldApply';
 import { deployModel } from '../utils';
-import { Deployment, DeploymentAssemblyResources } from '../../../../extension-points';
+import { Deployment } from '../../../../extension-points';
+import { DeploymentAssemblyResources } from '../../../../extension-points/deployment-wizard';
 import { InitialWizardFormData } from '../types';
 import { WizardFormState } from '../useDeploymentWizardReducer';
 import { ModelDeploymentWizardViewMode } from '../ModelDeploymentWizard';
@@ -60,10 +61,10 @@ export const useModelDeploymentSubmit = (
         if (
           viewMode === 'yaml-edit' &&
           (resources.model?.kind !== 'LLMInferenceService' ||
-            resources.model.apiVersion !== 'serving.kserve.io/v1alpha1')
+            resources.model.apiVersion !== 'serving.kserve.io/v1alpha2')
         ) {
           throw new Error(
-            'Invalid YAML: Kind must be LLMInferenceService and apiVersion must be serving.kserve.io/v1alpha1',
+            'Invalid YAML: Kind must be LLMInferenceService and apiVersion must be serving.kserve.io/v1alpha2',
           );
         }
         if (
@@ -78,7 +79,7 @@ export const useModelDeploymentSubmit = (
           );
         }
 
-        const serverResourceTemplateName = formState.modelServer.data?.selection?.name;
+        const serverResourceTemplateName = formState.modelServer?.data?.selection?.name;
         const allModelServerTemplates = formState.modelFormatState.templatesFilteredForModelType;
         const serverResource = serverResourceTemplateName
           ? getServingRuntimeFromTemplate(

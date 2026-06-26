@@ -1,5 +1,9 @@
-import { DashboardCommonConfig } from '#~/k8sTypes';
-import { SupportedArea, SupportedAreasState, DataScienceStackComponent } from './types';
+import type { DashboardCommonConfig } from '@odh-dashboard/k8s-core';
+import {
+  SupportedArea,
+  type SupportedAreasState,
+  DataScienceStackComponent,
+} from '@odh-dashboard/plugin-core/areas';
 
 export const techPreviewFlags = {
   genAiStudio: false,
@@ -10,13 +14,18 @@ export const techPreviewFlags = {
   maasAuthPolicies: true,
   aiAssetCustomEndpoints: false,
   mcpCatalog: false,
+  toolCalling: false,
   projectRBAC: true,
   observabilityDashboard: false,
   deploymentWizardYAMLViewer: false,
   externalVectorStores: false,
+  agentConfigManagement: false,
   vLLMDeploymentOnMaaS: false,
   llmGatewayField: false,
+  llmdTopologyConfigs: false,
   promptManagement: false,
+  mySubscriptions: true,
+  maasSettingsIaRedesign: false,
 } satisfies Partial<DashboardCommonConfig>;
 
 export const devTemporaryFeatureFlags = {
@@ -24,6 +33,8 @@ export const devTemporaryFeatureFlags = {
   disableProjectScoped: true,
   mlflowPipelines: false,
   nimWizard: false,
+  agentOps: false,
+  roleManagement: false,
 } satisfies Partial<DashboardCommonConfig>;
 
 // Group 1: Core Dashboard Features
@@ -170,11 +181,11 @@ export const SupportedAreasStateMap: SupportedAreasState = {
   },
   [SupportedArea.MODEL_CATALOG]: {
     featureFlags: ['disableModelCatalog'],
-    reliantAreas: [SupportedArea.MODEL_REGISTRY],
+    requiredComponents: [DataScienceStackComponent.MODEL_REGISTRY],
   },
   [SupportedArea.MCP_CATALOG]: {
     featureFlags: ['mcpCatalog'],
-    reliantAreas: [SupportedArea.MODEL_REGISTRY],
+    requiredComponents: [DataScienceStackComponent.MODEL_REGISTRY],
   },
   [SupportedArea.MODEL_REGISTRY]: {
     featureFlags: ['disableModelRegistry'],
@@ -219,6 +230,9 @@ export const SupportedAreasStateMap: SupportedAreasState = {
     featureFlags: ['trainingJobs'],
     requiredComponents: [DataScienceStackComponent.RAY],
   },
+  [SupportedArea.AGENT_OPS]: {
+    featureFlags: ['agentOps'],
+  },
   [SupportedArea.MLFLOW]: {
     requiredComponents: [DataScienceStackComponent.MLFLOW],
   },
@@ -229,12 +243,19 @@ export const SupportedAreasStateMap: SupportedAreasState = {
   [SupportedArea.PROJECT_RBAC_SETTINGS]: {
     featureFlags: ['projectRBAC'],
   },
+  [SupportedArea.ROLE_MANAGEMENT]: {
+    featureFlags: ['roleManagement'],
+  },
   [SupportedArea.YAML_VIEWER]: {
     featureFlags: ['deploymentWizardYAMLViewer'],
     reliantAreas: [SupportedArea.LLMD_SERVING],
   },
   [SupportedArea.VLLM_ON_MAAS]: {
     featureFlags: ['vLLMDeploymentOnMaaS'],
+    reliantAreas: [SupportedArea.LLMD_SERVING],
+  },
+  [SupportedArea.LLMD_TOPOLOGY_CONFIGS]: {
+    featureFlags: ['llmdTopologyConfigs'],
     reliantAreas: [SupportedArea.LLMD_SERVING],
   },
   [SupportedArea.LLMD_GATEWAY_FIELD]: {
@@ -246,6 +267,12 @@ export const SupportedAreasStateMap: SupportedAreasState = {
   },
   [SupportedArea.MAAS_AUTH_POLICIES]: {
     featureFlags: ['maasAuthPolicies'],
+  },
+  [SupportedArea.MY_SUBSCRIPTIONS]: {
+    featureFlags: ['mySubscriptions'],
+  },
+  [SupportedArea.MAAS_SETTINGS_IA_REDESIGN]: {
+    featureFlags: ['maasSettingsIaRedesign'],
   },
 };
 

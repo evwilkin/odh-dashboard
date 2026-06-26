@@ -1,19 +1,20 @@
 import type {
   DeployedModelServingDetails,
-  DeploymentWizardFieldExtension,
-  ModelServingDeploy,
-  ModelServingDeploymentFormDataExtension,
   ModelServingPlatformWatchDeploymentsExtension,
   ModelServingDeleteModal,
-  ModelServingDeploymentTransformExtension,
   ModelServingStartStopAction,
-  AssembleModelResourceExtension,
-  WizardField2Extension,
+} from '@odh-dashboard/model-serving/extension-points';
+import type {
+  WizardFieldExtension,
   WizardFieldApplyExtension,
   WizardFieldExtractorExtension,
-} from '@odh-dashboard/model-serving/extension-points';
-// eslint-disable-next-line no-restricted-syntax
-import { SupportedArea } from '@odh-dashboard/internal/concepts/areas/types';
+  ModelServingDeploymentFormDataExtension,
+  ModelServingDeploy,
+  AssembleModelResourceExtension,
+  DeploymentWizardFieldOverrideExtension,
+  ModelServingDeploymentTransformExtension,
+} from '@odh-dashboard/model-serving/extension-points/deployment-wizard';
+import { SupportedArea } from '@odh-dashboard/plugin-core/areas';
 import type { AreaExtension } from '@odh-dashboard/plugin-core/extension-points';
 import type { FetchStateObject } from '@odh-dashboard/internal/utilities/useFetch';
 import type { LLMdDeployment, LLMInferenceServiceConfigKind } from '../src/types';
@@ -25,11 +26,11 @@ import type {
 
 export const LLMD_SERVING_ID = 'llmd-serving';
 
-const llmConfigOptionsFieldExtension: WizardField2Extension<
+const llmConfigOptionsFieldExtension: WizardFieldExtension<
   LLMConfigOptionsFieldType,
   LLMdDeployment
 > = {
-  type: 'model-serving.deployment/wizard-field2',
+  type: 'model-serving.deployment/wizard-field',
   properties: {
     platform: LLMD_SERVING_ID,
     field: () =>
@@ -42,8 +43,8 @@ const llmConfigOptionsFieldExtension: WizardField2Extension<
   },
 };
 
-const gatewaySelectFieldExtension: WizardField2Extension<GatewaySelectFieldType, LLMdDeployment> = {
-  type: 'model-serving.deployment/wizard-field2',
+const gatewaySelectFieldExtension: WizardFieldExtension<GatewaySelectFieldType, LLMdDeployment> = {
+  type: 'model-serving.deployment/wizard-field',
   properties: {
     platform: LLMD_SERVING_ID,
     field: () =>
@@ -90,6 +91,38 @@ const gatewaySelectExtractorExtension: WizardFieldExtractorExtension<
   },
 };
 
+const deploymentMethodExtractorExtensionLllmdOnly: WizardFieldExtractorExtension<
+  { method: string },
+  LLMdDeployment
+> = {
+  type: 'model-serving.deployment/wizard-field-extractor',
+  properties: {
+    fieldId: 'deploymentMethod',
+    platform: LLMD_SERVING_ID,
+    extract: () =>
+      import('../src/deployments/model').then((m) => m.extractDeploymentMethodAlwaysLlmd),
+  },
+  flags: {
+    required: [LLMD_SERVING_ID],
+    disallowed: [SupportedArea.VLLM_ON_MAAS],
+  },
+};
+const deploymentMethodExtractorExtensionvLLMOnMaaS: WizardFieldExtractorExtension<
+  { method: string },
+  LLMdDeployment
+> = {
+  type: 'model-serving.deployment/wizard-field-extractor',
+  properties: {
+    fieldId: 'deploymentMethod',
+    platform: LLMD_SERVING_ID,
+    extract: () =>
+      import('../src/deployments/model').then((m) => m.extractDeploymentMethodvLLMOnMaaS),
+  },
+  flags: {
+    required: [LLMD_SERVING_ID, SupportedArea.VLLM_ON_MAAS],
+  },
+};
+
 const extensions: (
   | AreaExtension
   | ModelServingPlatformWatchDeploymentsExtension<LLMdDeployment>
@@ -98,13 +131,14 @@ const extensions: (
   | ModelServingDeleteModal<LLMdDeployment>
   | ModelServingDeploy<LLMdDeployment>
   | AssembleModelResourceExtension<LLMdDeployment>
-  | DeploymentWizardFieldExtension<LLMdDeployment>
+  | DeploymentWizardFieldOverrideExtension<LLMdDeployment>
   | ModelServingDeploymentTransformExtension<LLMdDeployment>
   | ModelServingStartStopAction<LLMdDeployment>
-  | WizardField2Extension<LLMConfigOptionsFieldType, LLMdDeployment>
-  | WizardField2Extension<GatewaySelectFieldType, LLMdDeployment>
+  | WizardFieldExtension<LLMConfigOptionsFieldType, LLMdDeployment>
+  | WizardFieldExtension<GatewaySelectFieldType, LLMdDeployment>
   | WizardFieldApplyExtension<GatewaySelectFieldData, LLMdDeployment>
   | WizardFieldExtractorExtension<GatewaySelectFieldData, LLMdDeployment>
+  | WizardFieldExtractorExtension<{ method: string }, LLMdDeployment>
 )[] = [
   {
     type: 'app.area',
@@ -209,17 +243,18 @@ const extensions: (
     },
   },
   {
-    type: 'model-serving.deployment/wizard-field',
+    type: 'model-serving.deployment/wizard-field-override',
     properties: {
       platform: LLMD_SERVING_ID,
       field: () => import('../src/wizardFields/modelServerField').then((m) => m.modelServerField),
     },
     flags: {
       required: [LLMD_SERVING_ID],
+      disallowed: [SupportedArea.VLLM_ON_MAAS],
     },
   },
   {
-    type: 'model-serving.deployment/wizard-field',
+    type: 'model-serving.deployment/wizard-field-override',
     properties: {
       platform: LLMD_SERVING_ID,
       field: () =>
@@ -230,7 +265,7 @@ const extensions: (
     },
   },
   {
-    type: 'model-serving.deployment/wizard-field',
+    type: 'model-serving.deployment/wizard-field-override',
     properties: {
       platform: LLMD_SERVING_ID,
       field: () =>
@@ -241,7 +276,7 @@ const extensions: (
     },
   },
   {
-    type: 'model-serving.deployment/wizard-field',
+    type: 'model-serving.deployment/wizard-field-override',
     properties: {
       platform: LLMD_SERVING_ID,
       field: () =>
@@ -252,7 +287,7 @@ const extensions: (
     },
   },
   {
-    type: 'model-serving.deployment/wizard-field',
+    type: 'model-serving.deployment/wizard-field-override',
     properties: {
       platform: LLMD_SERVING_ID,
       field: () =>
@@ -262,10 +297,38 @@ const extensions: (
       required: [LLMD_SERVING_ID],
     },
   },
+  {
+    type: 'model-serving.deployment/wizard-field-override',
+    properties: {
+      platform: LLMD_SERVING_ID,
+      field: () =>
+        import('../src/wizardFields/deploymentMethodField').then(
+          (m) => m.vllmDeploymentMethodOverride,
+        ),
+    },
+    flags: {
+      required: [LLMD_SERVING_ID, SupportedArea.VLLM_ON_MAAS],
+    },
+  },
+  {
+    type: 'model-serving.deployment/wizard-field-override',
+    properties: {
+      platform: LLMD_SERVING_ID,
+      field: () =>
+        import('../src/wizardFields/deploymentMethodField').then(
+          (m) => m.llmdDeploymentMethodOverride,
+        ),
+    },
+    flags: {
+      required: [LLMD_SERVING_ID],
+    },
+  },
   llmConfigOptionsFieldExtension,
   gatewaySelectFieldExtension,
   gatewaySelectApplyExtension,
   gatewaySelectExtractorExtension,
+  deploymentMethodExtractorExtensionLllmdOnly,
+  deploymentMethodExtractorExtensionvLLMOnMaaS,
   {
     type: 'model-serving.deployments-table/start-stop-action',
     properties: {
